@@ -1,0 +1,102 @@
+# Builds a release Ledge.app for this fork: Apple Silicon, ad-hoc signed, and
+# with no update feed.
+#
+# This fork is not the app that upstream ships. An update check would offer it
+# upstream's release, and installing that would replace the fork with it, so
+# the feed is taken out of the bundle's Info.plist before anything is built.
+# Without a feed the app never starts Sparkle (see AppDelegate.startNormally),
+# which is also how bundle.sh treats a development build.
+#
+# Ad-hoc signed means no Developer ID and no notarization: the first launch
+# needs right-click, Open, and macOS asks again for Accessibility, Calendar and
+# Bluetooth after every new build. sign.sh drops the Keep Awake helper from an
+# ad-hoc build, because nothing could verify it, so lid-closed Keep Awake is
+# not available in this app.
+name: Fork build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # bundle.sh stamps CFBundleVersion from the commit count.
+          fetch-depth: 0
+
+      # Package.swift needs Swift 6.2, which only Xcode 26 carries.
+      - name: Select Xcode 26
+        run: |
+          XCODE=/Applications/Xcode_26.2.app
+          if [[ ! -d "$XCODE" ]]; then
+            XCODE="$(ls -d /Applications/Xcode_26*.app | grep -iv beta | sort -V | tail -1)"
+          fi
+          test -n "$XCODE"
+          echo "DEVELOPER_DIR=$XCODE/Contents/Developer" >> "$GITHUB_ENV"
+          echo "using $XCODE"
+
+      - name: Versions
+        run: |
+          sw_vers
+          swift --version
+
+      # Edited in the runner's checkout and never committed, so the source
+      # stays what upstream ships and its tests still hold: one of them reads
+      # this file and expects a feed in it.
+      - name: Take the update feed out of Info.plist
+        run: |
+          for key in SUFeedURL SUEnableAutomaticChecks; do
+            /usr/libexec/PlistBuddy -c "Delete :$key" Bundle/Info.plist
+          done
+
+      - name: Icon
+        run: test -f build/AppIcon.icns || swift Scripts/makeicon.swift
+        continue-on-error: true
+
+      # The same steps `make release` takes, with the identity fixed to ad hoc.
+      - name: Build
+        run: swift build -c release --arch arm64
+
+      # The tree is dirty because of the edit above, which bundle.sh refuses
+      # for a release unless told it is not one.
+      - name: Bundle
+        run: LEDGE_DIST=1 LEDGE_ALLOW_DIRTY=1 ./Scripts/bundle.sh release build/Ledge.app .build/arm64-apple-macosx/release
+
+      - name: Sign ad hoc
+        run: LEDGE_DIST=1 ./Scripts/sign.sh build/Ledge.app -
+
+      - name: Check the bundle
+        run: |
+          APP=build/Ledge.app
+          lipo -archs "$APP/Contents/MacOS/Ledge"
+          codesign --verify --strict --verbose=1 "$APP"
+          for key in SUFeedURL SUEnableAutomaticChecks; do
+            if /usr/libexec/PlistBuddy -c "Print :$key" "$APP/Contents/Info.plist" >/dev/null 2>&1; then
+              echo "error: $key is still in the bundle's Info.plist" >&2
+              exit 1
+            fi
+          done
+          echo "no update feed in the bundle"
+
+      # ditto keeps the symlinks and permissions inside the bundle, which the
+      # artifact upload's own zip does not.
+      - name: Zip
+        run: ditto -c -k --keepParent build/Ledge.app Ledge.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ledge-fork-app
+          path: Ledge.zip
+          if-no-files-found: error
