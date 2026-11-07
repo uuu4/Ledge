@@ -1,0 +1,59 @@
+# Fork-only: render named preview states to PNG so UI changes can be looked at
+# without a Mac that has Xcode 26. Pick states with an extended regex.
+name: Gallery
+
+on:
+  workflow_dispatch:
+    inputs:
+      states:
+        description: "Extended regex over state names (LEDGE_GALLERY_STATE=list)"
+        default: "feed|weather|calendar|ears"
+      macs:
+        description: "Space-separated machines: 13 14 16 none"
+        default: "14"
+
+permissions:
+  contents: read
+
+jobs:
+  gallery:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: |
+          XCODE=/Applications/Xcode_26.2.app
+          if [[ ! -d "$XCODE" ]]; then
+            XCODE="$(ls -d /Applications/Xcode_26*.app | grep -iv beta | sort -V | tail -1)"
+          fi
+          test -n "$XCODE"
+          echo "DEVELOPER_DIR=$XCODE/Contents/Developer" >> "$GITHUB_ENV"
+
+      - name: Build preview
+        run: swift build -c debug --product LedgePreview
+
+      - name: Render
+        env:
+          STATES_RE: ${{ inputs.states }}
+          MACS: ${{ inputs.macs }}
+        run: |
+          BIN=.build/debug/LedgePreview
+          OUT="$RUNNER_TEMP/gallery"; mkdir -p "$OUT"
+          LEDGE_GALLERY_STATE=list "$BIN" > "$OUT/all-states.txt"
+          grep -E "$STATES_RE" "$OUT/all-states.txt" > "$OUT/selected.txt" || true
+          echo "selected $(wc -l < "$OUT/selected.txt") of $(wc -l < "$OUT/all-states.txt") states"
+          for mac in $MACS; do
+            while IFS= read -r s; do
+              [[ -z "$s" ]] && continue
+              LEDGE_GALLERY_STATE="$s" LEDGE_GALLERY_MAC="$mac" \
+                LEDGE_GALLERY_SHOT="$OUT/${s}@${mac}.png" "$BIN" 2>/dev/null | tail -1 >> "$OUT/report.jsonl" || true
+            done < "$OUT/selected.txt"
+          done
+          ls "$OUT" | head -100
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gallery
+          path: ${{ runner.temp }}/gallery
