@@ -128,7 +128,7 @@ Feeds are off until you switch them on in Settings, under Cards.
 | `compact_leading`, `compact_trailing` | Optional. Short text for the left and right of the notch while it's closed. Keep it to a few characters. |
 | `compact_leading_fraction`, `compact_trailing_fraction` | Optional. 0 to 1. Draws a small ring on that side, filled to the fraction, with the text drawn inside it, so keep that text to about four characters. With a fraction and no text, the ring is smaller and its colour follows the fraction: green, orange under 40%, red under 15%. Without a fraction, the side shows the feed's symbol beside its text instead. |
 | `level` | Optional. `normal`, `warning` or `critical`. Colours the closed notch's ring and text; a feed turning `critical` peeks once. |
-| `gauges` | Optional. Up to three, shown as rings across the top of the card. Each needs a `label`, a short `value` that goes inside the ring and a `fraction` from 0 to 1, and may have a `level` (`normal`, `warning` or `critical`) that colours the ring. An item missing one of the three is skipped. |
+| `gauges` | Optional. Up to four, shown as rings across the top of the card. Each needs a `label`, a short `value` that goes inside the ring and a `fraction` from 0 to 1, and may have a `level` (`normal`, `warning` or `critical`) that colours the ring. An item missing one of the three is skipped. |
 | `rows` | Optional. Up to eight, each with a `label` and a `value` (both required), and optionally a `detail`, a `fraction` from 0 to 1 that draws a thin bar, and a `level`. |
 | `updated_at` | Optional. Unix seconds. Defaults to when the file was last written. |
 | `stale_after` | Optional. Seconds after `updated_at` when the numbers stop being true. The card then dims and says how old it is. |
