@@ -1992,7 +1992,8 @@ public final class LedgeCoordinator {
                         self?.preferences.showVideoInCompact ?? Prefs.showVideoInCompact.defaultValue
                     },
                     webMedia: { [weak self] in self?.preferences.webMedia ?? .hidden },
-                    ownerIsApp: { BrowserCatalogue.shared.isOpenableApp(bundleID: $0) }
+                    ownerIsApp: { BrowserCatalogue.shared.isOpenableApp(bundleID: $0) },
+                    fullScreenOwner: { FullScreenSpace.ownerBundleID() }
                 )
                 self.nowPlayingProviderRef = provider
                 return provider
@@ -2194,6 +2195,7 @@ public final class LedgeCoordinator {
     /// immediate re-poll instead of waiting for its steady tick. Weak: the hub
     /// owns it, and it is rebuilt whenever the provider is toggled.
     private weak var nowPlayingProviderRef: NowPlayingProvider?
+    private var fullScreenSpaceToken: NSObjectProtocol?
 
     /// The live timer provider, so the menu bar and the card can drive the
     /// session. Weak: the hub owns it, and it is rebuilt when toggled.
@@ -3038,6 +3040,7 @@ public final class LedgeCoordinator {
         observeLiveEffectPreferences()
         permissionCompanion.start()
         observeMediaPreferences()
+        observeFullScreenSpace()
         observeCalendarChoice()
     }
 
@@ -3134,6 +3137,18 @@ public final class LedgeCoordinator {
                 self.nowPlayingProviderRef?.reconsider()
                 self.observeMediaPreferences()
             }
+        }
+    }
+
+    /// Going in and out of a full-screen Space decides whether the player may
+    /// hold the ears, so it is answered at once rather than on the next poll.
+    private func observeFullScreenSpace() {
+        fullScreenSpaceToken = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.nowPlayingProviderRef?.reconsider() }
         }
     }
 
