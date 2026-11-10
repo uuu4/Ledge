@@ -74,6 +74,10 @@ public final class ActivityCoordinator {
     private var lastNowPlayingPlaying = false
     private var lastNowPlayingSource: String?
     private var lastNowPlayingItem: String?
+    /// Whether a feed had the ears when the shell was last told. A feed is
+    /// "present, not playing", exactly as a paused track is, so one starting
+    /// or stopping beside a paused track moves neither boolean.
+    private var lastFeedResting = false
 
     /// Ids the user swiped away recently, so their next republish is not
     /// announced back at them. Pruned against the window on every sync.
@@ -290,6 +294,7 @@ public final class ActivityCoordinator {
         lastNowPlayingPlaying = false
         lastNowPlayingSource = nil
         lastNowPlayingItem = nil
+        lastFeedResting = false
         keepAwakeWasRunning.removeAll()
         feedLevels.removeAll()
         recentlyDismissed.removeAll()
@@ -567,11 +572,13 @@ public final class ActivityCoordinator {
         }()
         if present != lastNowPlayingPresent || playing != lastNowPlayingPlaying
             || playingSource != lastNowPlayingSource
-            || playingItem != lastNowPlayingItem {
+            || playingItem != lastNowPlayingItem
+            || feedResting != lastFeedResting {
             lastNowPlayingPresent = present
             lastNowPlayingPlaying = playing
             lastNowPlayingSource = playingSource
             lastNowPlayingItem = playingItem
+            lastFeedResting = feedResting
             onNowPlayingChanged(present, playing, pausedTimerRemaining)
         }
 
