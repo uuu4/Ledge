@@ -82,15 +82,17 @@ public enum Motion {
     /// beat. A volume key is not a change of subject: it is feedback, and
     /// feedback a third of a second behind the key reads as the app being
     /// slow. macOS's own readout appears at once.
-    public static let readoutIn: Animation = .spring(response: 0.16, dampingFraction: 1.0)
+    public static let readoutIn: Animation = .spring(response: 0.34, dampingFraction: 0.9)
 
-    /// The level readout's own timing: quick and plain, with no bounce and no
-    /// beat before the contents. Fitted by eye, frame by frame, to footage of
-    /// the readout on the Mac with the island, not taken from any Apple value.
-    public static let hudShapeIn: Animation = .spring(response: 0.12, dampingFraction: 1.0)
-    public static let hudContentIn: Animation = .spring(response: 0.09, dampingFraction: 1.0)
-    public static let hudShapeOut: Animation = .spring(response: 0.13, dampingFraction: 1.0)
-    public static let hudContentOut: Animation = .spring(response: 0.07, dampingFraction: 1.0)
+    /// The level readout's own timing. Unhurried rather than instant: the
+    /// shape opens over about a third of a second and settles with the
+    /// faintest give, the contents follow a touch behind it, and on the way
+    /// out the contents go first so the shape closes over nothing. The
+    /// earlier near-instant values (0.12 / 0.09) read as a flicker.
+    public static let hudShapeIn: Animation = .spring(response: 0.34, dampingFraction: 0.9)
+    public static let hudContentIn: Animation = .spring(response: 0.34, dampingFraction: 1.0)
+    public static let hudShapeOut: Animation = .spring(response: 0.32, dampingFraction: 1.0)
+    public static let hudContentOut: Animation = .easeOut(duration: 0.16)
 
     /// The shape's spring for a change of phase, given where it came from.
     /// `.animation(_:value:)` is only told the new value, and on the way out
@@ -110,9 +112,10 @@ public enum Motion {
         }
     }
 
-    /// The row coming and going. Scales in from the row's top edge, under the
-    /// cutout, so it seems to come out of the notch, and leaves as a plain fade
-    /// faster than the shape closes over it.
+    /// The row coming and going. Grows a touch from the row's top edge, under
+    /// the cutout, so it seems to come out of the notch, and leaves the same
+    /// way, faster than the shape closes over it. No blur: in the notch's
+    /// window a blurred row came to rest hidden once its arrival finished.
     public static func hudRow(reduced: Bool) -> AnyTransition {
         guard !reduced else { return reducedSwap }
         return .asymmetric(
@@ -121,7 +124,11 @@ public enum Motion {
                 identity: HUDRowArrival(hidden: false)
             )
             .animation(hudContentIn),
-            removal: AnyTransition.opacity.animation(hudContentOut)
+            removal: AnyTransition.modifier(
+                active: HUDRowArrival(hidden: true),
+                identity: HUDRowArrival(hidden: false)
+            )
+            .animation(hudContentOut)
         )
     }
 
@@ -132,7 +139,7 @@ public enum Motion {
     /// feel rather than see. A spring retargets from wherever it is, carrying
     /// its velocity, which is what makes a held key read as one continuous
     /// slide.
-    public static let levelChange: Animation = .spring(response: 0.2, dampingFraction: 0.85)
+    public static let levelChange: Animation = .spring(response: 0.3, dampingFraction: 0.92)
 
     /// A level under the pointer. It has to stay with the hand, so this is too
     /// quick to see and doesn't overshoot.
@@ -215,7 +222,7 @@ struct HUDRowArrival: ViewModifier {
     func body(content: Content) -> some View {
         content
             .opacity(hidden ? 0 : 1)
-            .scaleEffect(hidden ? 0.82 : 1, anchor: .top)
+            .scaleEffect(hidden ? 0.96 : 1, anchor: .top)
     }
 }
 

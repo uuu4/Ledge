@@ -76,6 +76,9 @@ public struct HUDRowView: View {
 
     private static let rowSpace = "hudRow"
 
+    /// The glyph's size against `HUDRowMetrics.iconSize`.
+    static let glyphScale: CGFloat = 0.7
+
     /// One VoiceOver step on a bar that is otherwise only dragged: five
     /// percent, clamped.
     nonisolated static func stepped(_ level: Double, _ direction: AccessibilityAdjustmentDirection) -> Double {
@@ -154,13 +157,15 @@ public struct HUDRowView: View {
     private var glyph: some View {
         // A plain cross-fade between glyphs, not the symbol "replace" effect
         // that shrinks the old icon to a point first.
+        // Smaller and lighter than the slot was sized for, and nudged right by
+        // what it lost, so the gap to the bar stays what it was.
         Image(systemName: readout.symbolName)
-            .font(.system(size: metrics.iconSize, weight: .semibold))
-            .foregroundStyle(.white)
+            .font(.system(size: metrics.iconSize * Self.glyphScale, weight: .medium))
+            .foregroundStyle(.white.opacity(0.92))
             .contentTransition(.opacity)
-            .animation(Motion.fast, value: readout.symbolName)
+            .animation(Motion.medium, value: readout.symbolName)
             .frame(width: metrics.iconSlotWidth, height: 0, alignment: .leading)
-            .offset(x: metrics.iconLeading, y: metrics.centreY)
+            .offset(x: metrics.iconLeading + metrics.iconSize * (1 - Self.glyphScale), y: metrics.centreY)
     }
 
     /// Muting drains the bar rather than blanking it, on the same spring as any
@@ -168,11 +173,11 @@ public struct HUDRowView: View {
     private var bar: some View {
         let shown = isMuted ? 0 : readout.level
         return ZStack(alignment: .topLeading) {
-            HUDSegmentsShape(level: 1, gap: metrics.segmentGap, innerRadius: metrics.innerCornerRadius)
-                .fill(.white.opacity(contrast == .increased ? 0.5 : 0.34))
-            // One shape for all the lit segments, so the glow blooms around
-            // them as one rod rather than as sixteen separate lights.
-            HUDSegmentsShape(level: shown, gap: metrics.segmentGap, innerRadius: metrics.innerCornerRadius)
+            Capsule()
+                .fill(.white.opacity(contrast == .increased ? 0.4 : 0.18))
+            // One continuous rod rather than sixteen lights: the plainer
+            // readout, and the one that slides instead of ticking.
+            HUDFillShape(level: shown)
                 .fill(.white)
                 .shadow(color: glowing ? .white.opacity(0.9) : .clear, radius: glowing ? 3.5 : 0)
                 .shadow(color: glowing ? .white.opacity(0.55) : .clear, radius: glowing ? 7 : 0)
@@ -200,6 +205,30 @@ public struct HUDRowActions {
         self.setLevel = setLevel
         self.toggleMute = toggleMute
         self.setDragging = setDragging
+    }
+}
+
+/// The bar's lit part: a capsule from the leading end up to the level.
+///
+/// Animates the level as a single number, so a held key's spring carries its
+/// velocity through. Clamped, because that spring may overshoot either end.
+struct HUDFillShape: Shape {
+
+    var level: Double
+
+    nonisolated var animatableData: Double {
+        get { level }
+        set { level = newValue }
+    }
+
+    nonisolated func path(in rect: CGRect) -> Path {
+        let clamped = level.isFinite ? min(max(level, 0), 1) : 0
+        let width = rect.width * clamped
+        guard width > 0 else { return Path() }
+        // Never narrower than it is tall, so the first step up is a dot rather
+        // than a sliver; the radius keeps both ends round all the way.
+        let lit = CGRect(x: rect.minX, y: rect.minY, width: max(width, min(rect.height, rect.width)), height: rect.height)
+        return Path(roundedRect: lit, cornerRadius: rect.height / 2)
     }
 }
 
